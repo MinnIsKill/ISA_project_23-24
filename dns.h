@@ -1,7 +1,12 @@
+/** @file:   dns.h
+ *  @brief:  Project for ISA (network applications and management) VUTBR FIT 2023/24
+ *  @author: Vojtěch Kališ (xkalis03)
+ *  @last_edit: 18th November 2023  
+**/
+
 #ifndef DNS_H
 #define DNS_H
 
-//#define _DEFAULT_SOURCE //beacause running -std=c99 prevents features.h (implicitly included in <unistd.h>) from defining _DEFAULT_SOURCE
 #include <unistd.h> //gethostname(), sethostname()
 
 #include <stdio.h>
@@ -17,6 +22,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h> //working with threads
+#include <sys/time.h> //struct timeval
+#include <net/if.h> //if_nametoindex
+#include <ctype.h> //tolower()
 
 /* DNS Qcodes and DNS header structure based on:
 https://0x00sec.org/t/dns-header-for-c/618 */
@@ -38,8 +46,9 @@ https://0x00sec.org/t/dns-header-for-c/618 */
 #define DNS_QCLASS_NONE		254
 #define DNS_QCLASS_ANY		255
 
+//OBSOLETE!!
 //2D array of first 5 DNS servers found in /etc/resolv.conf file
-char dns_list[5][50];
+//char dns_list[5][50];
 
 /**
  * @struct: structure for program's input parameters
@@ -128,6 +137,17 @@ struct dns_question_t{
     uint16_t q_class;    /* The QCLASS (1 = IN) */
 };
 
+//Constant sized fields of the resource record structure
+#pragma pack(push, 1)
+struct record_data
+{
+	uint16_t type;
+	uint16_t class;
+	uint32_t ttl;
+	uint16_t data_len;
+};
+#pragma pack(pop)
+
 /**
  * @struct: Resource record structure
 */
@@ -138,25 +158,60 @@ struct dns_record_a_t{
     //uint16_t class;
     //uint32_t ttl;
     //uint16_t length;
-    struct R_DATA_old *resource;
+    struct record_data *resource;
 	unsigned char *rdata;
 };
 
-//Constant sized fields of the resource record structure
-#pragma pack(push, 1)
-struct R_DATA_old
-{
-	uint16_t type;
-	uint16_t class;
-	uint32_t ttl;
-	uint16_t data_len;
+/**
+ * @struct: DNS replies structure
+*/
+struct dns_replies{
+    struct dns_record_a_t answers[50];
+    struct dns_record_a_t auth[50];
+    struct dns_record_a_t addit[50];
 };
-#pragma pack(pop)
-
-unsigned char* ReadName_old(unsigned char* reader,unsigned char* buffer,int* count);
-void ChangetoDnsNameFormat_old(unsigned char* dns, unsigned char* host);
 
 
+/*************************************************
+ *           AUXILIARY PRINT FUNCTIONS           *
+*************************************************/
+/** 
+ * @function: helpmsg
+ * @brief message printed when input arguments are invalid
+ */
+void helpmsg();
+
+/**
+ * @function: list_args
+ * @brief auxiliary function for listing all arguments saved after 'parse_args' function was run
+ *
+ * @param[in] s: a params structure
+ */
+void list_args(struct params s);
+
+/**
+ * @function: dns_header_fullprint
+ * @brief auxiliary dns header contents print function
+ *
+ * @param[in] dns: a dns header structure
+ */
+void dns_header_fullprint(struct dns_header_t *dns);
+
+/**
+ * @function: project_print
+ * @brief prints received packet specifically in the format the assignment desires
+ *
+ * @param[in] dns:      pointer to start of dns header structure within packet buffer
+ * @param[in] question: a question structure
+ * @param[in] dns_rep:  a response record structure containing all (answer, authority, additional) records
+ * @param[in] qname:    pointer to query name section of received packet
+ */
+void project_print(struct dns_header_t *dns, struct dns_question_t *question, 
+                   struct dns_replies *dns_rep, unsigned char *qname);
+
+/*************************************************
+ *           AUXILIARY TASK FUNCTIONS            *
+*************************************************/
 /** 
  * @function: string_firstnchars_remove
  * @brief string chopper
@@ -203,14 +258,97 @@ bool is_it_hostname(char *host);
  */
 bool is_it_valid_port(long port);
 
+/**
+ * @function: hostname_to_DNSname
+ * @brief converts hostname to DNSname (www.google.com --> 3www6google3com0)
+ * 
+ * @param[in] host: hostname string to be converted
+ * @param[in] dns:  string to save resulting DNSname into
+ */
+void hostname_to_DNSname(unsigned char *host, unsigned char *dns);
+
+/**
+ * @function: DNSname_to_hostname
+ * @brief converts DNSname to hostname (3www6google3com0 --> www.google.com)
+ * 
+ * @param[in] str: string to convert
+ */
+void DNSname_to_hostname(unsigned char *str);
+
+/**
+ * @function: DNS_Qtype_tostr
+ * @brief Qtype short to string converter
+ * 
+ * @param[in] Qtype: short value of query type
+ * @return string version of query type
+ */
+char* DNS_Qtype_tostr(uint16_t Qtype);
+
+/**
+ * @function: DNS_Qclass_tostr
+ * @brief Qclass short to string converter
+ * 
+ * @param[in] Qclass: short value of query class
+ * @return string version of query class
+ */
+char* DNS_Qclass_tostr(uint16_t Qclass);
+
+/**
+ * @function: dec_to_hex_IPv6
+ * @brief function that takes IPv6 in decimal form and transforms it into an actual IPv6 (hexa)
+ * 
+ * @param[in] input_string:  string containing the decimal form of an IPv6
+ * @param[in] output_string: string to save the hexa form of an IPv6 into
+ * @param[in] length:        length of @param input_string
+ * @return hexa form of IPv6 saved in @param output_string
+ */
+char* dec_to_hex_IPv6(unsigned char *input_string, char* output, int length);
+
+/**
+ * @function: read_compressed_name
+ * @brief read compressed name from a dns record
+ * 
+ * @param[in] reader: pointer to where compressed name is in @param buffer
+ * @param[in] buffer: buffer string containing the whole packet reply
+ * @param[in] count:  jump counter
+ * 
+ * @return string containing the decompressed name
+ */
+unsigned char* read_compressed_name(unsigned char* reader, unsigned char* buffer, int* count);
+
+/**
+ * @function: switch_bytes
+ * @brief switch: first 4 bits of byte #1 with last 4 bits of byte #2
+ *           and  last 4 bits of byte #1 with first 4 bits of byte #2
+ * 
+ * @param[in] first_field:  pointer to first byte
+ * @param[in] second_field: pointer to second byte
+ */
+void switch_bytes(uint8_t *first_field, uint8_t *second_field);
+
+/**
+ * @function: clean_exit
+ * @brief free all memory allocated during program run
+ * 
+ * @param[in] dns:     pointer to start of dns header structure within packet buffer
+ * @param[in] dns_rep: pointer to dns replies structure
+ */
+void clean_exit(struct dns_header_t *dns, struct dns_replies *dns_rep);
+
+
+/*************************************************
+ *          INTERNAL PROGRAM FUNCTIONS           *
+*************************************************/
 /** 
  * @function: parse_args
  * function for parsing input aguments
  * 
  * @param[in] argc: arguments counter
  * @param[in] argv: arguments pointer
+ * 
+ * @return 0 if successful, 1 if error occured
  */
-void parse_args(int argc, char *argv[]);
+int parse_args(int argc, char *argv[]);
 
 /**
  * @function: list_args
@@ -220,50 +358,52 @@ void parse_args(int argc, char *argv[]);
  */
 void dns_servers_get();
 
+//function for socket preparation
 /**
- * @function: DNS_Qtype_tostr
- * @brief Qtype integer to string converter
+ * @function: sock_prep
+ * @brief function for socket preparation
  * 
- * @param[in] Qtype: integer value of query type
- * @return string version of query type
- */
-char* DNS_Qtype_tostr(uint16_t Qtype);
+ * @param[in] sockfd: pointer to socket
+ * @param[in] dest:   IPv4 socket address structure (for if we're working with IPv4)
+ * @param[in] dest6:  IPv6 socket address structure (for if we're working with IPv4)
+*/
+void sock_prep(int *sockfd, struct sockaddr_in *dest, struct sockaddr_in6 *dest6);
 
 /**
- * @function: DNS_Qclass_tostr
- * @brief Qclass integer to string converter
+ * @function: dns_pack_prep
+ * @brief function for dns packet preparation
  * 
- * @param[in] Qclass: integer value of query class
- * @return string version of query class
- */
-char* DNS_Qclass_tostr(uint16_t Qclass);
+ * @param[in] dns: pointer to start of dns header structure withing packet buffer
+*/
+void dns_pack_prep(struct dns_header_t *dns);
 
 /**
- * @function: list_args
- * @brief auxiliary function for listing all arguments saved after 'parse_args' function was run
- *
- * @param[in] s: a params structure
- */
-void list_args(struct params s);
+ * @function: dns_qname_insert
+ * @brief resolves query hostname into DNSname and saves it into buffer. Also handles reverse DNS query
+ * 
+ * @param[in] qname: query hostname to be resolved/converted
+*/
+void dns_qname_insert(unsigned char *qname);
 
 /**
- * @function: list_args
- * @brief auxiliary dns header contents print function
- *
- * @param[in] dns: a dns header structure
- */
-void dns_header_fullprint(struct dns_header_t *dns);
+ * @function: dns_qinfo_prep
+ * @brief prepares query info
+ * 
+ * @param[in] qinfo:  pointer to query info structure (within packet buffer)
+ * @param[in] qtype:  query type to set
+ * @param[in] qclass: query class to set
+*/
+void dns_qinfo_prep(struct dns_question_t *qinfo, uint32_t qtype, uint32_t qclass);
 
 /**
- * @function: list_args
- * @brief auxiliary dns header contents print function
- *
- * @param[in] dns: a dns header structure
- * @param[in] question: a question structure
- * @param[in] answers: a response record structure containing answer records
- * @param[in] auth: a response record structure containing authority records
- * @param[in] addit: a response record structure containing additional records
- */
-void project_print(struct dns_header_t *dns, struct dns_question_t *question, struct dns_record_a_t *answers, struct dns_record_a_t *auth, struct dns_record_a_t *addit);
+ * @function: dns_reply_load
+ * @brief fills pre-prepared reply arrays with received data
+ * 
+ * @param[in] buf:     buffer holding whole packet reply
+ * @param[in] reader:  pointer to where answer data starts in @param buf
+ * @param[in] dns:     pointer to where dns header structure starts in @param buf
+ * @param[in] dns_rep: pointer to where dns replies structure starts in @param buf
+*/
+void dns_reply_load(unsigned char *buf, unsigned char *reader, struct dns_header_t *dns, struct dns_replies *dns_rep);
 
 #endif

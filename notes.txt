@@ -1,0 +1,35 @@
+/**
+ * TODO: - implement functionality when receiving IPv4 instead of hostname (done)
+ *       - implement functionality when receiving IPv6 instead of hostname (done)
+ *       - printing problems (try:   ./dns -s kazi.fit.vutbr.cz www.fit.vutbr.cz) (done?)
+ *       - try to find IPv6 for kazi.fit.vutbr.cz and use that in '-s'? 
+ *         (idk if not to just skip this one tbh, but I need to at least handle SEGFAULT tho) (done)
+ *       - rewrite ReadName (done --> I can't rewrite it much, I barely understand it tbh)
+ *       - shorten IPv6 addresses (done)
+ *       - reverse query (-x)  (done)
+ *       - rewrite hostname<-->DNSname convertors ??
+ *       - rewrite dns_reply_load ??
+ *       - tests (done)
+ *       - documentation
+*/
+
+//!!! INCLUDE THIS: https://www.binarytides.com/dns-query-code-in-c-with-linux-sockets/
+
+// make
+// make test
+// ---------- valid
+// ./dns -r -s kazi.fit.vutbr.cz www.fit.vut.cz
+// ./dns -r -s kazi.fit.vutbr.cz www.github.com
+// ./dns -r -s kazi.fit.vutbr.cz 147.229.9.26
+// ./dns -r -s 147.229.8.12 147.229.9.26
+// ./dns -r -s kazi.fit.vutbr.cz 2001:67c:1220:809::93e5:917  //IPv6 of www.fit.vutbr.cz
+// ./dns -r -s 2001:4860:4860::8888 www.fit.vut.cz  //IPv6 of www.google.com
+// ./dns -x -s kazi.fit.vutbr.cz 2001:67c:1220:809::93e5:917
+// ---------- errors
+// ./dns -r -s idont.exist www.fit.vut.cz
+// ./dns -r -s www.google.com idont.exist
+// ./dns -r -x -s kazi.fit.vutbr.cz www.fit.vut.cz
+// ---------- valgrind
+// valgrind --leak-check=full -v --track-origins=yes ./dns -r -s kazi.fit.vutbr.cz www.fit.vut.cz
+// valgrind --leak-check=full -v --track-origins=yes ./dns -r -s kazi.fit.vutbr.cz www.github.com
+// valgrind --leak-check=full -v --track-origins=yes ./dns -r -x -s kazi.fit.vutbr.cz 2001:67c:1220:809:0000:0000:93e5:917

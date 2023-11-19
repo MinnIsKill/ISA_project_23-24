@@ -1,0 +1,156 @@
+\documentclass[a4paper, 11pt]{article}
+
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[left=2cm, top=3cm, text={17cm, 24cm}]{geometry}
+\usepackage{times}
+\usepackage[unicode]{hyperref}
+\usepackage{indentfirst}
+\usepackage{graphics}
+\usepackage{fancyvrb}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\lstset{basicstyle=\footnotesize\ttfamily,breaklines=true}
+\lstset{framextopmargin=50pt,frame=none}
+\hypersetup{colorlinks = true, hypertexnames = false}
+
+\begin{document}
+
+	\begin{titlepage}
+		\begin{center}
+			\LARGE\textsc{Vysoké učení technické v~Brně} \\
+			\Large\textsc{Fakulta informačních technologií}\\
+			\vspace{\stretch{0.382}}
+			\LARGE{Network applications and management - project documentation} \\
+			\vspace{0.2cm}
+			\large{variant: DNS resolver} \\
+			\vspace{\stretch{0.618}}
+		\end{center}
+
+		\Large{19.11.2023 \hfill Vojtěch Kališ (xkalis03)}
+	\end{titlepage}
+
+%%% TOC
+	\tableofcontents
+
+%%%
+	\newpage
+	\section{Introduction}
+	The project's task was to create a C-based or C++-based implementation aiming to provide a 
+	functional tool for Domain Name System (DNS) resolution; this specific implementation is 
+	written in C. Its focus was on creating a functional resolver capable of DNS queries creation in 
+	the form of UDP packets, establishing communication with given DNS server, successful sending 
+	of said packet, and subsequent retrieval and processing of the response information.
+	\subsection{Program arguments}
+	\noindent \textbf{usage:}  dns [-r] [-x] [-6] -s server [-p port] address
+	\begin{itemize}[label={}]
+		\item {[-r]} = recursion desired
+		\item {[-x]} = make reverse request instead of direct request
+		\item {[-6]} = make request of type AAAA instead of default A
+		\item -s server = IP or hostname of server to which request will be sent
+		\item {[-p port]} = port number to use
+		\item address = address that is the object of query(request)
+	\end{itemize}
+	\noindent The arguments hereby listed were all provided by the project specification. However, some specific 
+	interactions weren't clearly implied and hence were up to interpretation---such as follows: 
+	\begin{itemize}
+		\item Reverse request (\textbf{-x}) requires \textit{server} to be an IP address, not hostname. While 
+			some workaround could mayhaps be found, it was instead chosen to throw an error 
+			should this scenario arise.
+		\item Reverse request (\textbf{-x}) and request of type AAAA (\textbf{-6}) are incompatible, 
+			as the former requires query type to be set to PTR, while the latter wishes to set it to 
+			AAAA. Once again, it was chosen to throw an error in this instance as well.
+	\end{itemize}
+	
+	\subsection{Software requirements}
+		\begin{itemize}
+			\item Unix-like operating system, such as Linux or macOS 
+			\item A C compiler supporting the C standard libraries and functionalities
+			\item Network connectivity
+			\item Python version 3 for running tests
+		\end{itemize}
+%%%
+
+	\newpage
+	\section{Resources \& Application layout}
+	Starting up (and further implementation of) the project involved a lot of web browsing and research. 
+	Eventually, \href{https://www.binarytides.com/dns-query-code-in-c-with-linux-sockets/}{this basic implementation}
+	\cite{article1} providing the basic functionality for DNS resolving was stumbled upon, and had been stripped and 
+	used as the bare bones of the project. The \href{https://datatracker.ietf.org/doc/html/rfc1035}{RFC 1035}\cite{rfc1035} 
+	was then used to restructure the DNS packet header, query and response structures, though in case of 
+	header, it has been opted to use structure as shown \href{https://www.freesoft.org/CIE/RFC/2065/40.htm}{here}\cite{rfc2065} 
+	instead. \href{https://datatracker.ietf.org/doc/html/rfc3596}{RFC 3596}\cite{rfc3596} then served well to implement 
+	IPv6 functionality as well, especially so when reverse DNS request was concerned. DNSname and hostname conversions 
+	were based on functions which can be found in \href{https://github.com/riveraj/dns-resolver/blob/master/main.c}{this implementation}
+	\cite{article2}
+	\subsection{Application layout (dns.c)}
+	It is important to note that, while the project consists of a multitude of functions all serving their specific 
+	purposes, the subject of this section is to provide overview of the main functions; that is, functions 
+	which have the biggest direct contribution to the subject of the project---DNS resolving itself. These 
+	functions can be found in file \textit{dns.c} underneath the \textit{INTERNAL PROGRAM FUNCTIONS} header.
+	
+	In case of interest in the other, auxiliary functions, the header file \textit{dns.h} provides a basic review 
+	of every single function contained within the program, and an effort has also been made to provide 
+	as much commentary inside the main file \textit{dns.c} as possible.
+
+	\subsubsection{parse\_args}
+	\noindent Parses command-line arguments to determine query parameters. It is here where the vast majority of invalid 
+	inputs are detected and handled (program exit, corresponding errors thrown)
+	\subsubsection{sock\_prep}
+	\noindent Sets up sockets for communication with DNS servers, including setting timeouts and preparing IPv4 or IPv6 addresses.
+	\subsubsection{dns\_pack\_prep}
+	\noindent Constructs DNS packet headers with default values, enabling modifications for specific query types and flags.
+	\subsubsection{dns\_qname\_insert}
+	\noindent Handles the transformation of domain name into DNS name format part of DNS query preparation.
+	\subsubsection{dns\_qinfo\_prep}
+	\noindent Handles the query information configuration (setting Qtype and Qclass) part of DNS query preparation.
+	\subsubsection{dns\_reply\_load}
+	\noindent Takes DNS reponse packet and processes it by populating pre-prepared arrays for answer, authority and 
+	additional records with respective data
+	\subsubsection{main}
+	\noindent Orchestrates the entire DNS resolution process, utilizing the above functions in their respective order to 
+	handle parsing input arguments, creating a DNS packet, setting up socket and then sending prepared query 
+	and receiving the answer. Lastly, it processes the response and then prints it out in required format 
+	using the \textit{project\_print} function.
+
+%%%
+
+	\newpage
+	\section{Functionality}
+	The program starts its function inside the \textit{main} function, where it first calls function 
+	\textit{parse\_args} to parse input arguments. Then, it creates a packet message buffer 
+	large enough to contain the entire response, after which comes the task of preparing a 
+	socket to connect to the desired DNS server; this icludes creating the socket and socket address 
+	structures, sending them to the \textit{sock\_prep} function to set said packet up for UDP packet 
+	(for DNS queries) and prepare the IPv4 or IPv6 address for the query.
+
+	After the socket is prepared, the program creates a DNS packet header structure and points 
+	it to its appropriate location within the buffer, then utilizes the \textit{dns\_pack\_prep} 
+	function to initialize all header bits and sets the \textit{recursion desired} bit based on 
+	if it's desired or not (meaning if '-r' argument was received or not).
+
+	Now comes the part of preparing the dns query structure---resolving query hostname, converting it 
+	into DNSname for which the \textit{dns\_qname\_insert} function is used, and inserting it into 
+	the buffer right after the DNS header structure. After that, the program also creates a query 
+	structure (holding the query type and class), inserts it into buffer after the query name, and fills it up.
+
+	With the packet structure now prepared, the program attempts to send the packet to the 
+	desired server and then attempts to retrieve the response (by loading it into the buffer, letting it 
+	overwrite our configuration). A pointer to the portion of the packet after all previously mentioned 
+	headers pushed into the buffer gets set and sent to the \textit{dns\_reply\_load} function, 
+	which then starts reading the reply from then on and loading each individual record 
+	into pre-prepared structure of record string arrays.
+
+	Last but not least, the program passes all necessary data pointers and the records structure 
+	into a special \textit{project\_print} function, which prints information out to stdout as per 
+	the task's requirements, and then utilizes the \textit{clean\_exit}function to free any and 
+	all allocated memory.
+
+
+	\newpage
+	\renewcommand{\refname}{Used literature}
+	\bibliographystyle{plain} % We choose the "plain" reference style
+	\bibliography{manual}
+
+\end{document}

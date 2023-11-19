@@ -1,0 +1,14 @@
+\babel@toc {czech}{}\relax 
+\contentsline {section}{\numberline {1}Introduction}{2}{section.2}%
+\contentsline {subsection}{\numberline {1.1}Program arguments}{2}{subsection.3}%
+\contentsline {subsection}{\numberline {1.2}Software requirements}{2}{subsection.4}%
+\contentsline {section}{\numberline {2}Resources \& Application layout}{3}{section.5}%
+\contentsline {subsection}{\numberline {2.1}Application layout (dns.c)}{3}{subsection.6}%
+\contentsline {subsubsection}{\numberline {2.1.1}parse\_args}{3}{subsubsection.7}%
+\contentsline {subsubsection}{\numberline {2.1.2}sock\_prep}{3}{subsubsection.8}%
+\contentsline {subsubsection}{\numberline {2.1.3}dns\_pack\_prep}{3}{subsubsection.9}%
+\contentsline {subsubsection}{\numberline {2.1.4}dns\_qname\_insert}{3}{subsubsection.10}%
+\contentsline {subsubsection}{\numberline {2.1.5}dns\_qinfo\_prep}{3}{subsubsection.11}%
+\contentsline {subsubsection}{\numberline {2.1.6}dns\_reply\_load}{3}{subsubsection.12}%
+\contentsline {subsubsection}{\numberline {2.1.7}main}{3}{subsubsection.13}%
+\contentsline {section}{\numberline {3}Functionality}{4}{section.14}%
